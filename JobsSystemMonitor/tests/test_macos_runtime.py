@@ -1,199 +1,88 @@
-"""macOS 薄入口的运行时发现与安装门禁；全部使用隔离假命令。Created by Jobs."""
+"""macOS 入口与公共环境模块之间的集成约束；不安装、不构建。Created by Jobs."""
 import os
 from pathlib import Path
-import shlex
 import shutil
 import subprocess
 import tempfile
 import unittest
 
-try:
-    import pty
-except ImportError:
-    pty = None
-
 ENTRY = Path(__file__).resolve().parents[2] / '【MacOS】📦生成dmg.command'
 
 
-@unittest.skipUnless(shutil.which('zsh') and os.name == 'posix', 'Requires zsh and POSIX PTY.')
+@unittest.skipUnless(shutil.which('zsh') and os.name == 'posix', 'Requires zsh.')
 class MacRuntimeTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.base = Path(self.temp.name).resolve()
+        self.project = self.base / '另一台电脑 🫡 克隆'
+        self.project.mkdir()
+        self.entry = self.project / ENTRY.name
+        self.entry.write_text(ENTRY.read_text(encoding='utf-8'), encoding='utf-8')
+        support = self.project / 'HomebrewSupport'
+        support.mkdir()
+        self.trace = self.base / 'trace'
+        self.python = self.base / 'brew-python'
+        self.python.write_text('#!/bin/zsh\nprint -r -- "BUILD:$*" >> "$TRACE"\nexit "${BUILD_RESULT:-0}"\n', encoding='utf-8')
+        self.python.chmod(0o755)
+        (support / 'python-runtime.zsh').write_text('''# Fake only the external module boundary.
+jobs_python_confirm_prepare() { print -r -- CONFIRM >> "$TRACE"; return "${CONFIRM_RESULT:-0}"; }
+jobs_python_ensure() { print -r -- "ENSURE:$*" >> "$TRACE"; export JOBS_PYTHON_BIN="$FAKE_PYTHON"; return "${ENSURE_RESULT:-0}"; }
+''', encoding='utf-8')
         self.bin = self.base / 'bin'
         self.bin.mkdir()
-        self.project = self.base / '监控 克隆目录'
-        self.project.mkdir()
-        self.marker = self.base / 'install-writes'
-        self.installed = self.base / 'installed'
-        self.zsh = shutil.which('zsh')
-        self.env = dict(os.environ, PATH=str(self.bin), HOME=str(self.base),
-                        INSTALL_WRITES=str(self.marker), INSTALL_PREFIX=str(self.installed),
-                        BREW_PREFIX=str(self.base), NO_COLOR='1')
-        # 重定位系统级发现路径，避免把测试机的真实 Python / 安装器当作测试依赖。
-        source = ENTRY.read_text(encoding='utf-8').rsplit('main "$@"', 1)[0]
-        for prefix in ('/opt/homebrew', '/usr/local', '/Library/Frameworks'):
-            source = source.replace(prefix, str(self.base / ('absent-' + prefix.rsplit('/', 1)[1])))
-        self.source = source + '\nprepare_display_paths\nSCRIPT_DIR=' + shlex.quote(str(self.project)) + '\n'
+        uname = self.bin / 'uname'
+        uname.write_text('#!/bin/zsh\nprint -r -- "${FAKE_PLATFORM:-Darwin}"\n', encoding='utf-8')
+        uname.chmod(0o755)
+        self.env = dict(os.environ, PATH=str(self.bin), NO_COLOR='1', TRACE=str(self.trace), FAKE_PYTHON=str(self.python))
 
     def tearDown(self):
         self.temp.cleanup()
 
-    def command(self, name, body):
-        path = self.bin / name
-        path.write_text('#!' + self.zsh + '\n' + body + '\n', encoding='utf-8')
-        path.chmod(0o755)
-        return path
+    def invoke(self, *arguments, **overrides):
+        return subprocess.run([shutil.which('zsh'), str(self.entry), *arguments],
+                              env=dict(self.env, **overrides), stdin=subprocess.DEVNULL,
+                              capture_output=True, text=True, timeout=10)
 
-    def python(self, name, version='3.13.1', healthy=True):
-        return self.command(name, 'print -r -- "Python ' + version + '"\nexit ' + ('0' if healthy else '2'))
-
-    def brew(self, install_result=0):
-        return self.command('brew', '''case "$1" in
---version) print -r -- 'Homebrew fake' ;;
---prefix) [[ $# == 1 ]] && print -r -- "$BREW_PREFIX" || print -r -- "$INSTALL_PREFIX" ;;
-install) print -r -- "$*" >> "$INSTALL_WRITES"; exit %s ;;
-*) exit 2 ;;
-esac''' % install_result)
-
-    def invoke(self, action='check_environment; print -r -- "SELECTED=$PYTHON_BIN"', answer=None):
-        command = [self.zsh, '-f', '-c', self.source + '\n' + action]
-        if answer is None:
-            return subprocess.run(command, env=self.env, stdin=subprocess.DEVNULL,
-                                  capture_output=True, text=True, timeout=10)
-        master, slave = pty.openpty()
-        try:
-            process = subprocess.Popen(command, env=self.env, stdin=slave,
-                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            os.write(master, answer)
-            output, error = process.communicate(timeout=10)
-            return subprocess.CompletedProcess(command, process.returncode, output, error)
-        finally:
-            os.close(slave)
-            os.close(master)
-
-    def test_versioned_python_is_found_when_default_is_old(self):
-        self.python('python3', '3.9.6', healthy=False)
-        expected = self.python('python3.12', '3.12.9')
+    def test_renamed_clone_uses_shared_runtime_before_build(self):
         result = self.invoke()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('SELECTED=' + str(expected), result.stdout)
-        self.assertFalse(self.marker.exists())
-
-    def test_old_default_version_is_reported_without_traceback(self):
-        self.python('python3', '3.9.6', healthy=False)
-        result = self.invoke()
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('Python 3.9.6', result.stdout)
-        self.assertIn('3.11+', result.stdout)
-        self.assertNotIn('Traceback', result.stdout + result.stderr)
-        self.assertNotIn('AssertionError', result.stdout + result.stderr)
-        self.assertFalse(self.marker.exists())
-
-    def test_absent_runtime_and_manager_print_official_install_guidance(self):
-        result = self.invoke()
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('https://www.python.org/downloads/macos/', result.stderr)
-        self.assertIn('尚未安装或清理', result.stderr)
-        self.assertFalse(self.marker.exists())
+        trace = self.trace.read_text(encoding='utf-8').splitlines()
+        self.assertEqual(trace[:2], ['CONFIRM', 'ENSURE:3.11 python@3.13'])
+        self.assertEqual(trace[2], 'BUILD:' + str(self.project / 'JobsSystemMonitor/scripts/build.py'))
         self.assertFalse((self.project / 'dist').exists())
 
-    def test_missing_runtime_with_no_tty_never_installs(self):
-        self.brew()
-        result = self.invoke()
+    def test_environment_cancellation_never_builds(self):
+        result = self.invoke(CONFIRM_RESULT='1')
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('没有可交互输入', result.stderr)
-        self.assertFalse(self.marker.exists())
+        self.assertEqual(self.trace.read_text(encoding='utf-8').splitlines(), ['CONFIRM'])
 
-    @unittest.skipIf(pty is None, 'Requires POSIX PTY.')
-    def test_missing_runtime_rejects_any_nonempty_answer_including_space(self):
-        self.brew()
-        for answer in (b'cancel\n', b' \n'):
-            with self.subTest(answer=answer):
-                result = self.invoke(answer=answer)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn('已取消', result.stdout)
-                self.assertFalse(self.marker.exists())
-                self.assertFalse((self.project / 'dist').exists())
-
-    @unittest.skipIf(pty is None, 'Requires POSIX PTY.')
-    def test_missing_runtime_eof_does_not_install(self):
-        self.brew()
-        result = self.invoke(answer=b'\x04')
+    def test_environment_failure_stops_before_build(self):
+        result = self.invoke(ENSURE_RESULT='7')
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('输入已结束', result.stderr)
-        self.assertFalse(self.marker.exists())
+        self.assertNotIn('BUILD:', self.trace.read_text(encoding='utf-8'))
 
-    def test_healthy_runtime_does_not_probe_or_install_manager(self):
-        self.python('python3.13')
-        self.command('brew', 'print -r -- "$*" >> "$INSTALL_WRITES"; exit 0')
-        result = self.invoke()
+    def test_help_never_loads_or_updates_environment(self):
+        result = self.invoke('--help')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('复用 Python 3.13.1', result.stdout)
-        self.assertFalse(self.marker.exists())
+        self.assertFalse(self.trace.exists())
 
-    @unittest.skipIf(pty is None, 'Requires POSIX PTY.')
-    def test_accepted_brew_install_rechecks_exact_new_runtime(self):
-        self.brew()
-        executable = self.installed / 'bin/python3.13'
-        executable.parent.mkdir(parents=True)
-        executable.write_text('#!' + self.zsh + '\nexit 0\n', encoding='utf-8')
-        executable.chmod(0o755)
-        result = self.invoke(answer=b'\n')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.marker.read_text(encoding='utf-8'), 'install python@3.13\n')
-        self.assertIn('SELECTED=' + str(executable), result.stdout)
-        self.assertFalse((self.project / 'dist').exists())
+    def test_build_failure_is_preserved(self):
+        result = self.invoke(BUILD_RESULT='9')
+        self.assertEqual(result.returncode, 9)
+        self.assertIn('打包已停止', result.stderr)
 
-    @unittest.skipIf(pty is None, 'Requires POSIX PTY.')
-    def test_install_failure_stops_without_build_or_cleanup(self):
-        self.brew(install_result=7)
-        result = self.invoke(answer=b'\n')
+    def test_missing_module_reports_error_without_build(self):
+        (self.project / 'HomebrewSupport/python-runtime.zsh').unlink()
+        result = self.invoke()
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('安装失败', result.stderr)
-        self.assertNotIn('SELECTED=', result.stdout)
-        self.assertFalse((self.project / 'dist').exists())
+        self.assertIn('缺少公共环境模块', result.stderr)
+        self.assertFalse(self.trace.exists())
 
-    @unittest.skipIf(pty is None, 'Requires POSIX PTY.')
-    def test_postinstall_unhealthy_runtime_stops(self):
-        self.brew()
-        result = self.invoke(answer=b'\n')
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('安装后 Python 仍不可用', result.stderr)
-        self.assertNotIn('SELECTED=', result.stdout)
-        self.assertFalse((self.project / 'dist').exists())
-
-    @unittest.skipIf(pty is None, 'Requires POSIX PTY.')
-    def test_existing_uv_is_an_alternative_install_channel(self):
-        executable = self.installed / 'bin/python3.13'
-        executable.parent.mkdir(parents=True)
-        executable.write_text('#!' + self.zsh + '\nexit 0\n', encoding='utf-8')
-        executable.chmod(0o755)
-        self.command('uv', '''case "$*" in
---version) print -r -- 'uv fake' ;;
-'python install 3.13') print -r -- "$*" >> "$INSTALL_WRITES" ;;
-'--no-cache python find --managed-python --no-python-downloads 3.13') print -r -- "$INSTALL_PREFIX/bin/python3.13" ;;
-*) exit 2 ;;
-esac''')
-        result = self.invoke(answer=b'\n')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('SELECTED=' + str(executable), result.stdout)
-        self.assertEqual(self.marker.read_text(encoding='utf-8'), 'python install 3.13\n')
-
-    def test_unsupported_platform_never_installs(self):
-        self.command('uname', 'print -r -- Linux')
-        self.brew()
-        result = self.invoke(action='check_platform; check_environment')
+    def test_other_platform_stops_before_environment(self):
+        result = self.invoke(FAKE_PLATFORM='Linux')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('仅支持 macOS', result.stderr)
-        self.assertFalse(self.marker.exists())
-
-    def test_help_has_no_runtime_checks_or_writes(self):
-        result = self.invoke(action='show_script_intro_and_wait --help; check_environment')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('--help 仅显示说明', result.stdout)
-        self.assertNotIn('未找到', result.stderr)
-        self.assertFalse(self.marker.exists())
+        self.assertFalse(self.trace.exists())
 
 
 if __name__ == '__main__':

@@ -54,11 +54,9 @@ Mac 安装包按本机构建架构生成；Apple Silicon 构建不代表 Intel �
 
 所有 `./` 路径均相对于打包脚本所在的工具交付目录。克隆目录可命名为 `JobsSystemMonitor`、`JobsSystemMonitor.py` 或其它名称；内部 `./JobsSystemMonitor/` 工程目录保持原结构，`dist/`、`work/` 和产物入口始终定位到当前工具交付目录。
 
-1、构建机需要 Python 3.11 或更新版本；Mac 入口依次检查本工具 `./JobsSystemMonitor/.venv`、PATH 中的版本化命令及 `python3` / `python`、[**Homebrew**](https://brew.sh/) 安装位置、官方 Framework 和 [**uv**](https://docs.astral.sh/uv/) 管理的运行时。每个候选都实际检查版本及构建所需标准库，旧系统 `python3` 会显示版本与跳过原因，再继续查找。Windows 仍需预先安装合适的 Python。Mac 与 Windows 在各自平台打包，不从 Mac 交叉生成 EXE。
+1、构建机需要 Python 3.11 或更新版本；Mac 入口使用随仓 `./HomebrewSupport/python-runtime.zsh` 公共模块，自检、安装或更新 [**Homebrew**](https://brew.sh/)，再检查其管理的 Python。已有 Homebrew 执行 `brew update` 更新自身与配方索引，不升级无关软件；Python 满足要求就复用，缺失或不兼容才安装 / 升级 `python@3.13` 并复检。不依赖系统旧 Python、uv 或父仓目录。Windows 仍需预先安装合适的 Python，双端分别本机打包。
 
-  Mac 未找到合适运行时时，只复用已有且健康的 Homebrew 或 uv，优先 Homebrew。直接回车安装 Python 3.13；输入任意字符（含空格）、输入结束或非交互环境均停止，不清理旧包。不会安装 Homebrew / uv、调用 `sudo` 或自动升级现有环境；没有可用管理器时，按提示从 [Python 官方 macOS 下载页](https://www.python.org/downloads/macos/) 安装后重试。
-
-2、双击对应入口。入口先显示内置自述，内层构建器等待回车确认后才继续，`Ctrl+C` 取消；没有交互输入时停止。健康运行时只保留这一次构建确认；如果前面安装了缺失的 Python，安装完成后仍需确认构建与旧包清理。可用 `--help` 只读查看说明。
+2、双击对应入口，先阅读自述并回车确认环境准备，`Ctrl+C` 取消。需要安装 Homebrew 时，精确输入 `YES` 选系统标准目录，其它输入或回车选用户目录；权限由官方安装器处理，失败不切换路线。Python 必需修复直接回车执行，任意非空输入（含空格）、EOF 或没有交互输入均停止。环境就绪后，内层构建器另行确认本次打包和旧包清理；`--help` 仅展示说明。已有低版或损坏 `.venv` 经确认完整改名备份后重建，备份保留。
 
 3、构建器优先复用入口选中解释器的健康依赖，其次复用内层 `./JobsSystemMonitor/.venv`。缺少必需依赖时，**直接回车安装；输入任何字符（含空格）后回车取消整个流程**。安装使用 [**pip**](https://pip.pypa.io/) 访问包源，仅修复缺失或不兼容项，不主动升级健康环境；安装失败或复检失败会停止。
 
@@ -146,7 +144,7 @@ Windows 已完成任务栏几何、DPI、PDH 采集与依赖资源关闭的模�
 | 面板关了如何找回 | 点击菜单栏 / 托盘 / 悬浮监控条；右键监控条也有详情与退出菜单。 |
 | Windows 遮挡图标 | 拖动监控条，或在详情中“重置位置”；也可关闭监控条，只保留托盘入口。 |
 | 再次打开提示已运行 | 单实例保护生效，通过现有入口打开；更新前先退出旧进程。 |
-| Mac 提示旧 Python 或缺少运行时 | 入口会跳过旧版本继续查找；没有合适版本时，可确认通过已有健康 Homebrew / uv 安装，或按提示安装官方 Python 后重试。 |
+| Mac 提示旧 Python 或缺少运行时 | 入口先自检 Homebrew 并更新，再准备满足版本要求的 Brew Python；必需修复回车执行，失败立即停止。 |
 | 打包失败 | 查看终端及 `JobsSystemMonitor-build.log`；依赖失败会在清理旧包之前停止。 |
 
 <a id="🔚" href="#前言" style="font-size:17px; color:green; font-weight:bold;">我是有底线的➤点我回到首页</a>
