@@ -49,6 +49,52 @@ class BuildSafetyTests(unittest.TestCase):
                 build.clean_dist(unsafe)
         self.assertEqual(sentinel.read_text(encoding='utf-8'), 'keep')
 
+    def test_clone_directory_can_have_any_name_including_spaces_and_chinese(self):
+        for name in ('JobsSystemMonitor', '我的监控 仓库'):
+            with self.subTest(name=name):
+                outer = self.base / name
+                root = outer / 'JobsSystemMonitor'
+                root.mkdir(parents=True)
+                with patch.object(build, 'ROOT', root), patch.object(build, 'OUTER', outer):
+                    dist = outer / 'dist'
+                    dist.mkdir()
+                    (dist / 'old.app').write_text('old', encoding='utf-8')
+                    self.assertEqual(build.fixed_directory('dist'), dist)
+                    self.assertEqual(build.fixed_directory('work'), outer / 'work')
+                    build.clean_dist(dist)
+                    self.assertFalse(dist.exists())
+                    self.assertTrue(root.is_dir())
+
+    def test_actual_script_location_anchors_output_after_renaming_clone(self):
+        outer = self.base / 'Gitee 监控'
+        script = outer / 'JobsSystemMonitor/scripts/build.py'
+        script.parent.mkdir(parents=True)
+        script.write_text(Path(build.__file__).read_text(encoding='utf-8'), encoding='utf-8')
+        spec = importlib.util.spec_from_file_location('renamed_clone_build', script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(module.OUTER, outer)
+        self.assertEqual(module.fixed_directory('dist'), outer / 'dist')
+
+    def test_layout_and_filesystem_root_are_rejected(self):
+        with patch.object(build, 'OUTER', self.base):
+            with self.assertRaises(RuntimeError):
+                build.fixed_directory('dist')
+        with patch.object(build, 'OUTER', Path('/')), patch.object(build, 'ROOT', Path('/JobsSystemMonitor')):
+            with self.assertRaises(RuntimeError):
+                build.fixed_directory('dist')
+        with self.assertRaises(RuntimeError):
+            build.fixed_directory('src')
+
+    @unittest.skipIf(sys.platform == 'win32', 'Windows symlink privileges vary.')
+    def test_linked_source_directory_is_rejected(self):
+        outside = self.base / 'external-source'
+        outside.mkdir()
+        self.root.rmdir()
+        self.root.symlink_to(outside, target_is_directory=True)
+        with self.assertRaises(RuntimeError):
+            build.fixed_directory('dist')
+
     @unittest.skipIf(sys.platform == 'win32', 'Windows symlink privileges vary.')
     def test_linked_dist_is_rejected_without_touching_target(self):
         outside = self.base / 'keep'
@@ -118,6 +164,38 @@ class BuildSafetyTests(unittest.TestCase):
                     environment.assert_not_called()
                     run.assert_not_called()
         self.assertFalse((self.outer / 'dist').exists())
+
+    def test_main_missing_dependencies_never_clear_old_dist_before_confirmation(self):
+        dist = self.outer / 'dist'
+        dist.mkdir()
+        sentinel = dist / 'keep.dmg'
+        sentinel.write_text('old', encoding='utf-8')
+        with patch.object(build.sys, 'argv', ['build.py']), patch.object(build, 'show_intro'):
+            with patch.object(build, 'confirm', side_effect=[None, RuntimeError('cancelled')]):
+                with patch.object(build.logging, 'basicConfig'), patch.object(build, 'check_platform'):
+                    with patch.object(build, 'missing_requirements', return_value=['psutil>=6,<8']):
+                        with patch.object(build, 'build') as actual_build, self.assertRaises(RuntimeError):
+                            build.main()
+                        actual_build.assert_not_called()
+        self.assertEqual(sentinel.read_text(encoding='utf-8'), 'old')
+
+    def test_unsupported_platform_is_rejected_before_build(self):
+        with patch.object(build.sys, 'platform', 'linux'), self.assertRaisesRegex(RuntimeError, 'macOS 或 Windows'):
+            build.check_platform()
+
+    def test_pyinstaller_minimum_matches_project(self):
+        requirement, minimum, _ = build.REQUIREMENTS['PyInstaller']
+        self.assertEqual(requirement, 'PyInstaller>=6.10,<7')
+        self.assertEqual(minimum, (6, 10))
+
+    def test_direct_old_python_reports_version_requirement_before_tomllib_import(self):
+        source = Path(build.__file__).read_text(encoding='utf-8')
+        command = 'import sys; sys.version_info = (3, 9); exec(' + repr(source) + ')'
+        result = subprocess.run([sys.executable, '-c', command], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('需要 Python 3.11+', result.stderr)
+        self.assertNotIn('Traceback', result.stderr)
+        self.assertNotIn('tomllib', result.stderr)
 
     def test_dependency_install_failure_stops_before_recheck(self):
         python = self.root / '.venv' / ('Scripts/python.exe' if sys.platform == 'win32' else 'bin/python')

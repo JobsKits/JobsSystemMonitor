@@ -3,6 +3,12 @@
 运行先显示范围并等待回车；依赖缺失再次确认安装。只清理本工具固定 dist，
 拒绝符号链接输出目录；成功后更新入口、打开产物位置并启动本次应用。
 """
+import sys
+
+if sys.version_info < (3, 11):
+    print('✖ 构建需要 Python 3.11+；请运行外层平台打包脚本自动检查运行时。', file=sys.stderr)
+    raise SystemExit(1)
+
 import argparse
 from datetime import datetime
 import json
@@ -12,20 +18,19 @@ from pathlib import Path
 import plistlib
 import shutil
 import subprocess
-import sys
 import tempfile
 import tomllib
 import venv
 import zipfile
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).absolute().parents[1]
 OUTER = ROOT.parent
 NAME = 'JobsSystemMonitor'
 LOG_FILE = Path(tempfile.gettempdir()) / (NAME + '-build.log')
 REQUIREMENTS = {
     'PySide6': ('PySide6>=6.8,<7', (6, 8), (7,)),
     'psutil': ('psutil>=6,<8', (6,), (8,)),
-    'PyInstaller': ('PyInstaller>=6,<7', (6,), (7,)),
+    'PyInstaller': ('PyInstaller>=6.10,<7', (6, 10), (7,)),
 }
 
 
@@ -68,9 +73,11 @@ def run(command, cwd=ROOT):
 
 def fixed_directory(name):
     """仅允许工程既定 dist / work，拒绝外层及目标目录的链接改向。"""
-    if name not in ('dist', 'work') or OUTER.name != NAME + '.py' or ROOT.parent != OUTER:
+    if (name not in ('dist', 'work') or ROOT.name != NAME or ROOT.parent != OUTER
+            or OUTER.parent == OUTER):
         raise RuntimeError('构建目录布局异常，停止。')
-    if OUTER.is_symlink() or OUTER.absolute() != OUTER.resolve() or not OUTER.is_dir():
+    if (OUTER.is_symlink() or OUTER.absolute() != OUTER.resolve() or not OUTER.is_dir()
+            or ROOT.is_symlink() or ROOT.absolute() != ROOT.resolve() or not ROOT.is_dir()):
         raise RuntimeError(f'交付根目录必须是真实目录：{OUTER}')
     target = OUTER / name
     if target.is_symlink() or target.resolve().parent != OUTER or (target.exists() and not target.is_dir()):
