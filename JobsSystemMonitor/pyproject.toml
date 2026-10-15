@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jobs-system-monitor"
+version = "0.1.1"
+description = "Jobs macOS 菜单栏与 Windows 任务栏整机监控"
+requires-python = ">=3.11"
+authors = [{name = "Jobs"}]
+dependencies = ["PySide6>=6.8,<7", "psutil>=6,<8"]
+
+[project.optional-dependencies]
+build = ["pyinstaller>=6.10,<7"]
+
+[project.gui-scripts]
+jobs-system-monitor = "jobs_system_monitor.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
