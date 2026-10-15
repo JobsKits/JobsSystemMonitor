@@ -7,6 +7,10 @@
 # 输出安装诊断，避免混入返回的命令路径。
 jobs_brew_note() {
   print -u2 -r -- "ℹ $*"
+  if [[ "${_JOBS_ENV_LOG_READY:-0}" == 1 && -n "${LOG_FILE:-}" ]]; then
+    print -r -- "ℹ $*" >> "$LOG_FILE"
+  fi
+  return 0
 }
 # 验证候选能够执行；共享安装只读不代表未安装。
 jobs_brew_candidate_ok() {
@@ -60,16 +64,64 @@ jobs_brew_choose_installation() {
     typeset -g JOBS_HOMEBREW_INSTALL_MODE=user
   fi
 }
-# 将官方系统安装器下载到临时文件后执行，失败不自动改装到用户目录。
+# 有限重试临时网络错误；每次重新下载，只在给定的官方地址之间回退。
+jobs_brew_download_file() {
+  local destination="$1" description="$2" download_url attempt download_result=1 http_code
+  local -a request_headers
+  shift 2
+  for download_url in "$@"; do
+    request_headers=()
+    if [[ "$download_url" == https://api.github.com/repos/Homebrew/install/contents/install.sh\?ref=HEAD ]]; then
+      request_headers=(-H 'Accept: application/vnd.github.raw+json')
+    fi
+    for attempt in 1 2 3; do
+      jobs_brew_note "下载${description}（第 $attempt/3 次）：$download_url"
+      download_result=0
+      http_code="$(curl -q -fsSL --proto '=https' --proto-redir '=https' \
+        --connect-timeout 10 --max-time 30 "${request_headers[@]}" \
+        --write-out '%{http_code}' "$download_url" -o "$destination" \
+        2> >(tee -a "${LOG_FILE:-/dev/null}" >&2))" || download_result=$?
+      if (( download_result == 0 )); then
+        return 0
+      fi
+      rm -f -- "$destination" || return 1
+      jobs_brew_note "${description}下载失败：curl 退出码 $download_result，HTTP ${http_code:-未知}。"
+      case "$download_result" in
+        130|143) return "$download_result" ;;
+        5|6|7|18|28|35|52|55|56) ;;
+        22) [[ "$http_code" == 408 || "$http_code" == 429 || "$http_code" == 5[0-9][0-9] ]] || break ;;
+        *) break ;;
+      esac
+      if (( attempt < 3 )); then
+        jobs_brew_note '临时连接失败，1 秒后重试同一官方地址。'
+        sleep 1 || return 1
+      fi
+    done
+    jobs_brew_note '当前官方地址不可用；如有下一官方地址，将继续下载，安装目录保持原选择。'
+  done
+  jobs_brew_note "获取${description}失败，未执行安装。请检查网络、DNS、终端 HTTPS_PROXY / ALL_PROXY 配置及上述官方域名的可达性；日志：${LOG_FILE:-终端输出}。"
+  return "$download_result"
+}
+# 校验官方安装脚本后仅执行一次，下载失败与安装失败分别报告。
 jobs_brew_install_system() {
   local installer system_prefix="$(jobs_brew_system_prefix)" installer_result=0
   command -v curl >/dev/null 2>&1 || { jobs_brew_note "缺少 curl，无法获取官方安装器。"; return 1; }
   installer="$(mktemp "${TMPDIR:-/tmp}/jobs-homebrew-install.XXXXXX")" || return 1
-  if curl -fsSL --connect-timeout 10 --max-time 120 https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o "$installer"; then
-    /bin/bash "$installer" || installer_result=$?
+  if jobs_brew_download_file "$installer" 'Homebrew 官方安装器' \
+      https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh \
+      'https://api.github.com/repos/Homebrew/install/contents/install.sh?ref=HEAD'; then
+    if [[ ! -s "$installer" || "$(head -n 1 "$installer")" != '#!/bin/bash' ]] || ! /bin/bash -n "$installer"; then
+      rm -f -- "$installer"
+      jobs_brew_note '官方安装器响应为空或内容校验失败（可能是 HTML / JSON 错误页）；未执行安装。'
+      return 1
+    fi
   else
-    installer_result=1
+    installer_result=$?
+    rm -f -- "$installer"
+    jobs_brew_note "系统目录安装器下载失败（curl 退出码 $installer_result）；尚未执行安装，不自动切换安装路径。"
+    return "$installer_result"
   fi
+  /bin/bash "$installer" || installer_result=$?
   rm -- "$installer"
   if (( installer_result != 0 )); then
     jobs_brew_note "系统目录安装失败（退出码 $installer_result）；停止，不自动切换安装路径。"
@@ -95,7 +147,8 @@ jobs_brew_install_user() {
   export HOMEBREW_NO_SUDO=1
   mkdir -p "${prefix:h}" || return 1
   stage="$(mktemp -d "${prefix:h}/.jobs-homebrew.XXXXXX")" || return 1
-  if ! curl -fsSL --connect-timeout 10 --max-time 60 https://api.github.com/repos/Homebrew/brew/releases/latest -o "$stage/release.json"; then
+  if ! jobs_brew_download_file "$stage/release.json" 'Homebrew 官方稳定版本' \
+      https://api.github.com/repos/Homebrew/brew/releases/latest; then
     rm -r -- "$stage"
     jobs_brew_note "获取官方稳定版本失败，停止安装。"
     return 1
@@ -189,6 +242,10 @@ jobs_brew_install_or_exit() {
 # 输出诊断，不污染函数返回的解释器路径。
 _jobs_python_note() {
   print -u2 -r -- "$*"
+  if [[ "${_JOBS_ENV_LOG_READY:-0}" == 1 && -n "${LOG_FILE:-}" ]]; then
+    print -r -- "$*" >> "$LOG_FILE"
+  fi
+  return 0
 }
 # 标识当前 zsh 进程及其子 shell，避免继承环境绕过确认。
 _jobs_python_process_token() {
@@ -572,6 +629,7 @@ SCRIPT_FILE="${(%):-%x}"
 SCRIPT_DIR=""
 LOG_FILE=""
 PYTHON_BIN=""
+_JOBS_ENV_LOG_READY=0
 # 无副作用地准备展示路径，不修改运行环境或写日志。
 prepare_display_paths() {
     SCRIPT_DIR="${${functions_source[prepare_display_paths]}:A:h}"
@@ -600,6 +658,7 @@ show_script_intro_and_wait() {
     print_intro_line body '2、先更新或安装 Homebrew，再准备其管理的 Python 3.11+；缺失依赖回车安装。'
     print_intro_line body '3、Python 满足要求时不升级；任意非空输入取消安装；输出 dist/YYYY.MM.DD HH-mm-ss，验证后更新相对链接。'
     print_intro_line body '4、打开本次磁盘位置，再启动本次 APP；成功结尾不再等待。'
+    print_intro_line body '5、Homebrew 下载临时失败时，每地址最多尝试 3 次；官方安装器可改用 GitHub 官方 API，安装路径保持原选择。'
     print_intro_line body "日志：${LOG_FILE}；环境准备与内层构建分别等待回车确认，Ctrl+C 取消。"
     if [[ "${1:-}" == '--help' || "${1:-}" == '-h' ]]; then
         print -r -- '用法：双击此脚本或在终端运行；--help 仅显示说明，无副作用。'
@@ -616,6 +675,8 @@ check_platform() {
 # 在本脚本内部准备 Homebrew 与兼容的 Python。
 prepare_python_runtime() {
   jobs_python_confirm_prepare "将更新 Homebrew，并检查本工具的 Python 环境" || exit 1
+  : > "$LOG_FILE" || { print -u2 -r -- "无法创建环境准备日志：$LOG_FILE"; exit 1; }
+  _JOBS_ENV_LOG_READY=1
   jobs_python_ensure 3.11 python@3.13 || exit 1
 }
 # 在构建前完成内置运行时自检。

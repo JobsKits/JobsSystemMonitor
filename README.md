@@ -58,6 +58,8 @@ Mac 安装包按本机构建架构生成；Apple Silicon 构建不代表 Intel �
 
 2、双击对应入口，先阅读自述并回车确认环境准备，`Ctrl+C` 取消。需要安装 Homebrew 时，精确输入 `YES` 选系统标准目录，其它输入或回车选用户目录；权限由官方安装器处理，失败不切换路线。Python 必需修复直接回车执行，任意非空输入（含空格）、EOF 或没有交互输入均停止。环境就绪后，内层构建器另行确认本次打包和旧包清理；`--help` 仅展示说明。已有低版或损坏 `.venv` 经确认完整改名备份后重建，备份保留。
 
+  Homebrew 下载遇到连接重置、超时或临时服务端错误时，每个地址最多尝试 3 次，每次连接超时 10 秒、总超时 30 秒，重试间隔 1 秒。系统安装器先从官方 `raw.githubusercontent.com/Homebrew/install` 获取，失败时改从 [**GitHub 官方内容 API**](https://docs.github.com/en/rest/repos/contents#get-repository-content) 获取同一仓库的原始脚本；这只切换下载地址，安装目录保持原选择。下载完成后检查非空、Bash 脚本头和语法，再执行一次安装；安装执行失败不重试。用户目录安装的稳定版本查询使用相同的有限下载重试，Git 克隆失败仍立即停止。
+
 3、构建器优先复用入口选中解释器的健康依赖，其次复用内层 `./JobsSystemMonitor/.venv`。缺少必需依赖时，**直接回车安装；输入任何字符（含空格）后回车取消整个流程**。安装使用 [**pip**](https://pip.pypa.io/) 访问包源，仅修复缺失或不兼容项，不主动升级健康环境；安装失败或复检失败会停止。
 
 4、环境检查通过后，删除本工具固定 `./dist/` 中全部旧产物，并移除指向它的旧快捷入口。拒绝符号链接 / 外部输出目录，清理失败立即停止；不清理源码或其它应用。
@@ -66,7 +68,7 @@ Mac 安装包按本机构建架构生成；Apple Silicon 构建不代表 Intel �
 
 6、成功后先打开本次产物磁盘位置，再启动本次软件，结尾不再要求回车。失败时不启动旧包；Windows 失败时保留终端。更新正在运行的版本前，请先从监控面板“退出”，以便新进程读取新版本。
 
-构建日志为系统临时目录中的 `JobsSystemMonitor-build.log`；实际位置在入口自述中显示。构建中间文件保存在 `./work/<构建时间>/`，已忽略入库；交付时只需分发 APP / DMG 或完整 Windows ZIP。
+构建日志为系统临时目录中的 `JobsSystemMonitor-build.log`；实际位置在入口自述中显示。Mac 在确认环境准备后初始化该日志，记录环境诊断、Homebrew 下载地址、尝试次数及原始 curl / HTTP 错误码；内层构建继续记录打包日志。构建中间文件保存在 `./work/<构建时间>/`，已忽略入库；交付时只需分发 APP / DMG 或完整 Windows ZIP。
 
 ## 四、<span id="metrics">指标口径</span> <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
@@ -145,6 +147,8 @@ Windows 已完成任务栏几何、DPI、PDH 采集与依赖资源关闭的模�
 | Windows 遮挡图标 | 拖动监控条，或在详情中“重置位置”；也可关闭监控条，只保留托盘入口。 |
 | 再次打开提示已运行 | 单实例保护生效，通过现有入口打开；更新前先退出旧进程。 |
 | Mac 提示旧 Python 或缺少运行时 | 入口先自检 Homebrew 并更新，再准备满足版本要求的 Brew Python；必需修复回车执行，失败立即停止。 |
+| Homebrew 下载提示 `curl: (35) Recv failure: Connection reset by peer` | TLS 连接阶段失败，尚未执行安装器，与 `YES` 路径选择无关。脚本会有限重试并尝试官方 API；仍失败时检查网络 / DNS 及终端代理是否可访问这两个官方域名。终端使用代理软件时，按软件提供的设置配置 `HTTPS_PROXY` / `ALL_PROXY`；脚本保留证书校验，不自动改系统代理。 |
+| Homebrew 提示证书错误、HTTP 403 或安装器内容校验失败 | 检查终端证书、官方 API 限流和网络返回内容；证书错误、HTTP 403 不在同一地址反复重试。HTML / JSON 错误页、空文件和语法异常不会执行；未进入打包和旧包清理。 |
 | 打包失败 | 查看终端及 `JobsSystemMonitor-build.log`；依赖失败会在清理旧包之前停止。 |
 
 <a id="🔚" href="#前言" style="font-size:17px; color:green; font-weight:bold;">我是有底线的➤点我回到首页</a>

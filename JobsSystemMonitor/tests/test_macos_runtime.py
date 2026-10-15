@@ -32,7 +32,8 @@ jobs_python_ensure() { print -r -- "ENSURE:$*" >> "$TRACE"; export JOBS_PYTHON_B
         uname = self.bin / 'uname'
         uname.write_text('#!/bin/zsh\nprint -r -- "${FAKE_PLATFORM:-Darwin}"\n', encoding='utf-8')
         uname.chmod(0o755)
-        self.env = dict(os.environ, PATH=str(self.bin), NO_COLOR='1', TRACE=str(self.trace), FAKE_PYTHON=str(self.python))
+        self.env = dict(os.environ, PATH=str(self.bin), TMPDIR=str(self.base), NO_COLOR='1',
+                        TRACE=str(self.trace), FAKE_PYTHON=str(self.python))
 
     def tearDown(self):
         self.temp.cleanup()
@@ -54,6 +55,7 @@ jobs_python_ensure() { print -r -- "ENSURE:$*" >> "$TRACE"; export JOBS_PYTHON_B
         result = self.invoke(CONFIRM_RESULT='1')
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.trace.read_text(encoding='utf-8').splitlines(), ['CONFIRM'])
+        self.assertFalse((self.base / 'JobsSystemMonitor-build.log').exists())
 
     def test_environment_failure_stops_before_build(self):
         result = self.invoke(ENSURE_RESULT='7')
@@ -64,6 +66,14 @@ jobs_python_ensure() { print -r -- "ENSURE:$*" >> "$TRACE"; export JOBS_PYTHON_B
         result = self.invoke('--help')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(self.trace.exists())
+        self.assertFalse((self.base / 'JobsSystemMonitor-build.log').exists())
+
+    def test_real_environment_confirmation_without_tty_never_writes_log(self):
+        self.entry.write_text(ENTRY.read_text(encoding='utf-8'), encoding='utf-8')
+        result = self.invoke()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('环境准备需要终端确认', result.stderr)
+        self.assertFalse((self.base / 'JobsSystemMonitor-build.log').exists())
 
     def test_build_failure_is_preserved(self):
         result = self.invoke(BUILD_RESULT='9')
