@@ -54,7 +54,7 @@ Mac 安装包按本机构建架构生成；Apple Silicon 构建不代表 Intel �
 
 所有 `./` 路径均相对于打包脚本所在的工具交付目录。克隆目录可命名为 `JobsSystemMonitor`、`JobsSystemMonitor.py` 或其它名称；内部 `./JobsSystemMonitor/` 工程目录保持原结构，`dist/`、`work/` 和产物入口始终定位到当前工具交付目录。
 
-1、构建机需要 Python 3.11 或更新版本；Mac 入口使用随仓 `./HomebrewSupport/python-runtime.zsh` 公共模块，自检、安装或更新 [**Homebrew**](https://brew.sh/)，再检查其管理的 Python。已有 Homebrew 执行 `brew update` 更新自身与配方索引，不升级无关软件；Python 满足要求就复用，缺失或不兼容才安装 / 升级 `python@3.13` 并复检。不依赖系统旧 Python、uv 或父仓目录。Windows 仍需预先安装合适的 Python，双端分别本机打包。
+1、构建机需要 Python 3.11 或更新版本；Mac 入口使用本脚本内封装的具名自检函数，检查、安装或更新 [**Homebrew**](https://brew.sh/)，再检查其管理的 Python。已有 Homebrew 执行 `brew update` 更新自身与配方索引，不升级无关软件；Python 满足要求就复用，缺失或不兼容才安装 / 升级 `python@3.13` 并复检。自检实现完整随脚本携带，不依赖外部支持库、同步脚本、系统旧 Python、uv 或父仓目录。Windows 仍需预先安装合适的 Python，双端分别本机打包。
 
 2、双击对应入口，先阅读自述并回车确认环境准备，`Ctrl+C` 取消。需要安装 Homebrew 时，精确输入 `YES` 选系统标准目录，其它输入或回车选用户目录；权限由官方安装器处理，失败不切换路线。Python 必需修复直接回车执行，任意非空输入（含空格）、EOF 或没有交互输入均停止。环境就绪后，内层构建器另行确认本次打包和旧包清理；`--help` 仅展示说明。已有低版或损坏 `.venv` 经确认完整改名备份后重建，备份保留。
 

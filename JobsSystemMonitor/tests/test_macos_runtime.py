@@ -1,4 +1,4 @@
-"""macOS 入口与公共环境模块之间的集成约束；不安装、不构建。Created by Jobs."""
+"""macOS 独立入口与内嵌环境函数之间的集成约束；不安装、不构建。Created by Jobs."""
 import os
 from pathlib import Path
 import shutil
@@ -17,17 +17,16 @@ class MacRuntimeTests(unittest.TestCase):
         self.project = self.base / '另一台电脑 🫡 克隆'
         self.project.mkdir()
         self.entry = self.project / ENTRY.name
-        self.entry.write_text(ENTRY.read_text(encoding='utf-8'), encoding='utf-8')
-        support = self.project / 'HomebrewSupport'
-        support.mkdir()
         self.trace = self.base / 'trace'
         self.python = self.base / 'brew-python'
         self.python.write_text('#!/bin/zsh\nprint -r -- "BUILD:$*" >> "$TRACE"\nexit "${BUILD_RESULT:-0}"\n', encoding='utf-8')
         self.python.chmod(0o755)
-        (support / 'python-runtime.zsh').write_text('''# Fake only the external module boundary.
+        boundary = '''# Replace only public environment function boundaries.
 jobs_python_confirm_prepare() { print -r -- CONFIRM >> "$TRACE"; return "${CONFIRM_RESULT:-0}"; }
 jobs_python_ensure() { print -r -- "ENSURE:$*" >> "$TRACE"; export JOBS_PYTHON_BIN="$FAKE_PYTHON"; return "${ENSURE_RESULT:-0}"; }
-''', encoding='utf-8')
+'''
+        source = ENTRY.read_text(encoding='utf-8').rsplit('main \"$@\"', 1)[0]
+        self.entry.write_text(source + '\n' + boundary + '\nmain \"$@\"\n', encoding='utf-8')
         self.bin = self.base / 'bin'
         self.bin.mkdir()
         uname = self.bin / 'uname'
@@ -43,7 +42,7 @@ jobs_python_ensure() { print -r -- "ENSURE:$*" >> "$TRACE"; export JOBS_PYTHON_B
                               env=dict(self.env, **overrides), stdin=subprocess.DEVNULL,
                               capture_output=True, text=True, timeout=10)
 
-    def test_renamed_clone_uses_shared_runtime_before_build(self):
+    def test_renamed_clone_uses_embedded_runtime_before_build(self):
         result = self.invoke()
         self.assertEqual(result.returncode, 0, result.stderr)
         trace = self.trace.read_text(encoding='utf-8').splitlines()
@@ -71,12 +70,12 @@ jobs_python_ensure() { print -r -- "ENSURE:$*" >> "$TRACE"; export JOBS_PYTHON_B
         self.assertEqual(result.returncode, 9)
         self.assertIn('打包已停止', result.stderr)
 
-    def test_missing_module_reports_error_without_build(self):
-        (self.project / 'HomebrewSupport/python-runtime.zsh').unlink()
+    def test_standalone_clone_needs_no_external_support_directory(self):
+        self.assertFalse((self.project / 'HomebrewSupport').exists())
+        self.assertFalse((self.project.parent / 'HomebrewSupport').exists())
         result = self.invoke()
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('缺少公共环境模块', result.stderr)
-        self.assertFalse(self.trace.exists())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('BUILD:', self.trace.read_text(encoding='utf-8'))
 
     def test_other_platform_stops_before_environment(self):
         result = self.invoke(FAKE_PLATFORM='Linux')
