@@ -70,6 +70,26 @@ Mac 安装包按本机构建架构生成；Apple Silicon 构建不代表 Intel �
 
 构建日志为系统临时目录中的 `JobsSystemMonitor-build.log`；实际位置在入口自述中显示。Mac 在确认环境准备后初始化该日志，记录环境诊断、Homebrew 下载地址、尝试次数及原始 curl / HTTP 错误码；内层构建继续记录打包日志。构建中间文件保存在 `./work/<构建时间>/`，已忽略入库；交付时只需分发 APP / DMG 或完整 Windows ZIP。
 
+### [【MacOS】📦生成dmg.command](./【MacOS】📦生成dmg.command)
+
+> **目的：** 在本机生成 JobsSystemMonitor 的 APP / DMG，并打开本次成品。
+
+* 阅读自述，确认环境准备；检查 Homebrew 和兼容的 Python，再交给本工程构建器。
+  * 必需依赖缺失：回车安装，任意非空输入取消；环境或复检失败时停止。
+* 确认构建范围后准备虚拟环境与依赖，仅清理本工具外层 `dist/` 的旧产物。
+* 打包并校验 APP，封装 DMG，统一输出到 `dist/YYYY.MM.DD HH-mm-ss/`。
+* 更新第一层产物快捷方式，打开产物目录，再启动本次 APP；失败时查看系统临时目录中的构建日志。
+
+### [【Windows】📦生成exe.bat](./【Windows】📦生成exe.bat)
+
+> **目的：** 在 Windows 本机生成 JobsSystemMonitor 的 EXE 分发目录与 ZIP。
+
+* 显示构建说明，依次检查 `py -3` 和 `python`，转交本工程构建器。
+  * 没有可用 Python 3.11+：提示安装并停止；`--help` 只显示说明。
+* 确认后准备项目虚拟环境；必需依赖缺失时回车安装，任意非空输入取消。
+* 清理本工具外层 `dist/`，生成并核验 EXE 目录和 ZIP，保存到同一构建时间目录。
+* 更新 EXE / ZIP 快捷方式，打开产物目录并启动新 EXE；失败时停止并保留日志。
+
 ## 四、<span id="metrics">指标口径</span> <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
 | 指标 | 来源与口径 |
@@ -150,5 +170,26 @@ Windows 已完成任务栏几何、DPI、PDH 采集与依赖资源关闭的模�
 | Homebrew 下载提示 `curl: (35) Recv failure: Connection reset by peer` | TLS 连接阶段失败，尚未执行安装器，与 `YES` 路径选择无关。脚本会有限重试并尝试官方 API；仍失败时检查网络 / DNS 及终端代理是否可访问这两个官方域名。终端使用代理软件时，按软件提供的设置配置 `HTTPS_PROXY` / `ALL_PROXY`；脚本保留证书校验，不自动改系统代理。 |
 | Homebrew 提示证书错误、HTTP 403 或安装器内容校验失败 | 检查终端证书、官方 API 限流和网络返回内容；证书错误、HTTP 403 不在同一地址反复重试。HTML / JSON 错误页、空文件和语法异常不会执行；未进入打包和旧包清理。 |
 | 打包失败 | 查看终端及 `JobsSystemMonitor-build.log`；依赖失败会在清理旧包之前停止。 |
+
+## 七、<span id="repository-layout-and-entrypoints">本仓目录与脚本入口</span> <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+
+以下为当前检出的源码与维护入口；依赖环境、Git 元数据、构建缓存和生成产物略去，独立子仓仅列目录。
+
+```text
+.
+├── .gitignore
+├── 【MacOS】📦生成dmg.command
+├── 【Windows】📦生成exe.bat
+├── icon.png
+├── JobsSystemMonitor/
+│   ├── assets/
+│   ├── pyproject.toml
+│   ├── scripts/
+│   ├── src/
+│   └── tests/
+└── README.md
+```
+
+* `JobsSystemMonitor/src/` 保存系统采样、菜单栏 / 任务栏与桌面界面；`scripts/` 保存构建、启动和快捷方式辅助代码，`tests/` 保存回归用例。
 
 <a id="🔚" href="#前言" style="font-size:17px; color:green; font-weight:bold;">我是有底线的➤点我回到首页</a>
