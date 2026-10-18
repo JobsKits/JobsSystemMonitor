@@ -2,11 +2,30 @@
 
 ![Jobs出品，必属精品](https://picsum.photos/1500/400)
 
-[toc]
+<!-- jobs-toc:start -->
+<!-- jobs-toc:source {"v":2,"token":"[toc]"} -->
+<details>
+<summary>📚 目录（点击展开 / 收起）</summary>
+
+- [🔥 前言](#jobs-toc-heading-1)
+- [一、功能与边界](#features)
+- [二、运行成品](#run)
+  - [2.1、Mac](#jobs-toc-heading-4)
+  - [2.2、Windows](#jobs-toc-heading-5)
+- [三、双端打包](#build)
+  - [【MacOS】📦生成dmg.command](#jobs-toc-heading-7)
+  - [【Windows】📦生成exe.bat](#jobs-toc-heading-8)
+- [四、指标口径](#metrics)
+- [五、源码与验证](#development)
+- [六、日志与排查](#troubleshooting)
+- [七、本仓目录与脚本入口](#repository-layout-and-entrypoints)
+
+</details>
+<!-- jobs-toc:end -->
 
 ---
 
-## 🔥 <font id=前言>前言</font>
+## <span id="jobs-toc-heading-1" data-jobs-toc="v2">🔥 <font id=前言>前言</font></span><!-- jobs-toc:heading-end -->
 
 使用 [**Python**](https://www.python.org) 编写的整机监控工具：在 [**macOS**](https://www.apple.com/macos/) 菜单栏显示 CPU / GPU / 内存占用和上下行速率，在 [**Windows**](https://www.microsoft.com/windows) 任务栏区域显示可拖动监控条，并提供托盘入口。参考用户提供的紧凑监控样式，专注实时监控。
 
@@ -33,13 +52,13 @@ Mac 菜单栏由系统自动匹配文字颜色；详情与桌面悬浮条使用�
 
 ## 二、<span id="run">运行成品</span> <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
-### 2.1、Mac <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+### <span id="jobs-toc-heading-4" data-jobs-toc="v2">2.1、Mac <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
 成功构建后，第一层 `./JobsSystemMonitor.app` 和 `./JobsSystemMonitor.dmg` 为指向最新时间目录的相对符号链接。可直接打开 APP；也可打开 DMG，将 APP 拖入“应用程序”。成品包含运行时，不需要另外安装 Python 或依赖。
 
 Mac 安装包按本机构建架构生成；Apple Silicon 构建不代表 Intel 构建已验证。当前安装包使用本地临时签名，未经过开发者签名与公证；公开分发时应补齐正式签名、公证和许可文件。请按系统正常“隐私与安全性”流程处理自己构建的应用，不需要关闭系统安全保护。
 
-### 2.2、Windows <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+### <span id="jobs-toc-heading-5" data-jobs-toc="v2">2.2、Windows <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
 成功构建后，第一层 `./JobsSystemMonitor.exe.lnk` 启动程序，`./JobsSystemMonitor.zip.lnk` 指向完整分发包。分发时发送 ZIP；接收方解压后运行 `JobsSystemMonitor/JobsSystemMonitor.exe`，**不能只复制 EXE**，同层 `_internal` 保存必要的 Python 与图形库。
 
@@ -70,7 +89,7 @@ Mac 安装包按本机构建架构生成；Apple Silicon 构建不代表 Intel �
 
 构建日志为系统临时目录中的 `JobsSystemMonitor-build.log`；实际位置在入口自述中显示。Mac 在确认环境准备后初始化该日志，记录环境诊断、Homebrew 下载地址、尝试次数及原始 curl / HTTP 错误码；内层构建继续记录打包日志。构建中间文件保存在 `./work/<构建时间>/`，已忽略入库；交付时只需分发 APP / DMG 或完整 Windows ZIP。
 
-### [【MacOS】📦生成dmg.command](./【MacOS】📦生成dmg.command)
+### <span id="jobs-toc-heading-7" data-jobs-toc="v2">[【MacOS】📦生成dmg.command](./【MacOS】📦生成dmg.command)</span><!-- jobs-toc:heading-end -->
 
 > **目的：** 在本机生成 JobsSystemMonitor 的 APP / DMG，并打开本次成品。
 
@@ -80,7 +99,7 @@ Mac 安装包按本机构建架构生成；Apple Silicon 构建不代表 Intel �
 * 打包并校验 APP，封装 DMG，统一输出到 `dist/YYYY.MM.DD HH-mm-ss/`。
 * 更新第一层产物快捷方式，打开产物目录，再启动本次 APP；失败时查看系统临时目录中的构建日志。
 
-### [【Windows】📦生成exe.bat](./【Windows】📦生成exe.bat)
+### <span id="jobs-toc-heading-8" data-jobs-toc="v2">[【Windows】📦生成exe.bat](./【Windows】📦生成exe.bat)</span><!-- jobs-toc:heading-end -->
 
 > **目的：** 在 Windows 本机生成 JobsSystemMonitor 的 EXE 分发目录与 ZIP。
 
