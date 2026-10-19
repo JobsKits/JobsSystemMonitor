@@ -29,8 +29,18 @@
 | 文件 | 职责 |
 | --- | --- |
 | [MarkdownToc.mjs](./MarkdownToc.mjs) | 自包含转换、安装、验证与卸载入口。 |
-| `manifest.json` | 仓库根相对路径清单；仅这些含有效目录标签的文档接入。 |
+| [manifest.json](./manifest.json) | 仓库根相对路径清单；仅这些含有效目录标签的文档接入。 |
 | `README.md` | 本目录用途、命令与维护边界。 |
+
+复用时，将上述三件套部署到目标仓库根目录的 `.jobs-markdown-toc/`。模板清单只登记随包提供、含有效 `[toc]` 的 `.jobs-markdown-toc/README.md`；目标仓库的其它文档在核实标签、所有权和 Git 归属后增量加入 `files`，已有清单内容须保留。下文命令均在目标仓库部署后的工具目录执行。
+
+手动接入时，先把清单中的精确路径增量登记到目标仓库根 `.gitattributes`；仅使用默认模板清单时，对应受控块如下。已有受控块在原位补齐，保留其它属性；新增文档须同步追加对应的精确路径，含空格或特殊字符的路径按 Git 属性语法转义。
+
+```gitattributes
+# jobs-markdown-toc:start
+"/.jobs-markdown-toc/README.md" filter=jobs-markdown-toc
+# jobs-markdown-toc:end
+```
 
 需要 [**Node.js**](https://nodejs.org/) 20 或更新版本以及 Git，不需要 npm 安装依赖。每个仓库自带完整工具，不依赖其它项目或本机 Skills 目录。清单内路径以仓库根定位；命令从本目录执行也能定位到正确仓库。
 
