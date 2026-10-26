@@ -27,7 +27,15 @@
 
 ## <span id="jobs-toc-heading-1" data-jobs-toc="v2">🔥 <font id=前言>前言</font></span><!-- jobs-toc:heading-end -->
 
+**最低支持系统：[Windows](https://www.microsoft.com/windows) 10 64 位（x64）。** 这是当前最低支持目标；具体最低 build 尚未锁定，完整实机兼容性仍待验证。
+
 使用 [**Python**](https://www.python.org) 编写的整机监控工具：在 [**macOS**](https://www.apple.com/macos/) 菜单栏显示 CPU / GPU / 内存占用和上下行速率，在 [**Windows**](https://www.microsoft.com/windows) 任务栏区域显示可拖动监控条，并提供托盘入口。参考用户提供的紧凑监控样式，专注实时监控。
+
+[**Windows**](https://www.microsoft.com/windows) **兼容范围：当前构建与成品测试目标为 Windows 10 / 11 x64；Windows XP、Vista、7、8、8.1 不支持当前图形依赖。** [**Qt 6.8 官方 Windows 平台表**](https://doc.qt.io/qt-6.8/windows.html)列出的 x64 基线为 Windows 10 1809+ / Windows 11；本项目未锁定具体运行库版本，不能据此承诺每次构建都兼容同一最低系统版本。
+
+成品已包含 [**Python**](https://www.python.org) 与图形依赖，运行成品无需另外安装 Python；源码运行和打包才需要开发依赖。EXE 架构随构建所用 Python 和依赖 wheel 决定，x86 / ARM64 尚无统一交付验收；Windows 原生界面与分发仍须在对应目标机验证。
+
+构建要求为 `Python>=3.11`、`PySide6>=6.8,<7`、`PyInstaller>=6.10,<7`，另需 `psutil>=6,<8`，详见[依赖配置](./JobsSystemMonitor/pyproject.toml)。Windows 使用 `onedir` 分发，保留 EXE 与 `_internal/` 完整目录，不能只拷 EXE。
 
 导航：[功能与边界](#features) · [运行成品](#run) · [双端打包](#build) · [指标口径](#metrics) · [源码与验证](#development) · [日志与排查](#troubleshooting)。
 
@@ -62,7 +70,7 @@ Mac 安装包按本机构建架构生成；Apple Silicon 构建不代表 Intel �
 
 成功构建后，第一层 `./JobsSystemMonitor.exe.lnk` 启动程序，`./JobsSystemMonitor.zip.lnk` 指向完整分发包。分发时发送 ZIP；接收方解压后运行 `JobsSystemMonitor/JobsSystemMonitor.exe`，**不能只复制 EXE**，同层 `_internal` 保存必要的 Python 与图形库。
 
-若托盘图标被 Windows 折叠，可在托盘展开区域找到本工具；任务栏监控条默认开启。支持的系统版本由所用 [**Qt / PySide6**](https://doc.qt.io/qtforpython-6/) wheel 决定，建议 Windows 10 / 11 的 64 位环境；旧系统不在验收范围。
+若托盘图标被 Windows 折叠，可在托盘展开区域找到本工具；任务栏监控条默认开启。目标系统按前言的 Windows 10 / 11 x64 范围测试，实际最低版本取决于本次构建所用 [**Qt / PySide6**](https://doc.qt.io/qtforpython-6/) wheel；Windows XP 至 8.1 不支持当前依赖。
 
 ## 三、<span id="build">双端打包</span> <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
