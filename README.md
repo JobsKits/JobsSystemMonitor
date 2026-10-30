@@ -111,6 +111,8 @@ Mac 安装包按本机构建架构生成；Apple Silicon 构建不代表 Intel �
 
 > **目的：** 在 Windows 本机生成 JobsSystemMonitor 的 EXE 分发目录与 ZIP。
 
+Windows 构建输出与日志统一 UTF-8，仅设置当前构建进程及子进程；直接调用内层构建器同样处理 GBK 重定向。[构建辅助脚本说明](./JobsSystemMonitor/scripts/README.md)列出入口、边界与隔离测试。
+
 * 显示构建说明，依次检查 `py -3` 和 `python`，转交本工程构建器。
   * 没有可用 Python 3.11+：提示安装并停止；`--help` 只显示说明。
 * 确认后准备项目虚拟环境；必需依赖缺失时回车安装，任意非空输入取消。
